@@ -2,7 +2,7 @@
 param()
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$psFiles=@(Get-ChildItem -LiteralPath $projectRoot -Recurse -Filter '*.ps1' -File | Where-Object {$_.FullName -notmatch '[\\/]evidence[\\/]'})
+$psFiles=@(Get-ChildItem -LiteralPath $projectRoot -Recurse -Filter '*.ps1' -File | Where-Object {$_.FullName -notmatch '[\\/](evidence|work|dist)[\\/]'})
 foreach($file in $psFiles){
     $tokens=$null;$errors=$null
     $null=[Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)
@@ -29,4 +29,10 @@ if($LASTEXITCODE -ne 0){throw '原生接口自检失败。'}
 $reportPath=Get-ChildItem -LiteralPath (Join-Path $testDir 'evidence') -Filter result.json -File -Recurse | Select-Object -First 1
 $report=Get-Content -LiteralPath $reportPath.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
 if($report.Status -ne 'SelfTestPassed' -or $report.DesktopInputPerformed -ne $false){throw '自检结果异常。'}
+& $powershell -NoProfile -File (Join-Path $projectRoot 'tests\Verify-Douyin.ps1')
+if($LASTEXITCODE -ne 0){throw '抖音状态与输入保护检查失败。'}
+& $powershell -NoProfile -File (Join-Path $projectRoot 'tests\Verify-Skill.ps1')
+if($LASTEXITCODE -ne 0){throw 'Skill 后台控制与独立运行检查失败。'}
+& $powershell -NoProfile -File (Join-Path $projectRoot 'tests\Verify-Monitor.ps1')
+if($LASTEXITCODE -ne 0){throw '持续监控检查失败。'}
 [pscustomobject]@{Status='Passed';ParsedScripts=$psFiles.Count;InvalidConfigurationsRejected=$invalidCases.Count;NativeCompile=$true;DesktopActions=0;TestReport=$reportPath.FullName}

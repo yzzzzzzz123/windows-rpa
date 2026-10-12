@@ -1,0 +1,17 @@
+{
+  "SchemaVersion": 1,
+  "SearchTerms": ["AI视频剪辑", "AI分镜创作", "AI无限画布"],
+  "MatchAny": ["剪辑", "分镜", "无限画布"],
+  "Comment": "sparnow，感兴趣可以来了解。",
+  "Browser": {"ProcessName": "chrome", "TitleContains": "抖音", "AutoActivate": true},
+  "Timing": {"PageWaitSeconds": 20, "CommentIntervalSeconds": 10, "EmptyQueueWaitSeconds": 300},
+  "Discovery": {"MaxScrollRounds": 3, "MaxVideosPerSearch": 12},
+  "Selectors": {
+    "AddressAutomationId": "view_1012",
+    "CommentCardAutomationId": "videoSideCard",
+    "EditorClass": "notranslate public-DraftEditor-content",
+    "Placeholder": "留下你的精彩评论吧",
+    "CommentButtonClassToken": "p9sQWW6T",
+    "SendButtonClasses": ["wchsYBpK jfGCpJo0", "oXIqR6qH OcDpqUTc"]
+  }
+}

@@ -1,5 +1,6 @@
 evidence/
 work/
+dist/
 *.log
 *.tmp
 .env

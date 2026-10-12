@@ -29,6 +29,11 @@ public static class DingRpa {
     [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd,uint flags);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
+    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hwnd, int command);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hwnd);
+    [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SendMessageTimeout(IntPtr hwnd,uint message,UIntPtr wparam,IntPtr lparam,uint flags,uint timeout,out UIntPtr result);
+    [DllImport("user32.dll", SetLastError=true)] static extern IntPtr OpenInputDesktop(uint flags,bool inherit,uint access);
+    [DllImport("user32.dll")] static extern bool CloseDesktop(IntPtr desktop);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern IntPtr GetThreadDesktop(uint threadId);
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
@@ -56,6 +61,58 @@ public static class DingRpa {
         if (!GetUserObjectInformation(GetThreadDesktop(GetCurrentThreadId()),2,name,(uint)(name.Capacity*2),out needed)) return "unavailable:" + Marshal.GetLastWin32Error();
         return name.ToString();
     }
+    public static string InputDesktopName() {
+        IntPtr desktop=OpenInputDesktop(0,false,1);
+        if(desktop==IntPtr.Zero) return "unavailable:"+Marshal.GetLastWin32Error();
+        try {
+            var name=new StringBuilder(512); uint needed;
+            if(!GetUserObjectInformation(desktop,2,name,(uint)(name.Capacity*2),out needed)) return "unavailable:"+Marshal.GetLastWin32Error();
+            return name.ToString();
+        } finally { CloseDesktop(desktop); }
+    }
+    public static string ActivateTarget(IntPtr hwnd,uint expectedProcessId) {
+        uint targetProcessId;
+        if(hwnd==IntPtr.Zero || GetWindowThreadProcessId(hwnd,out targetProcessId)==0 || targetProcessId!=expectedProcessId)
+            throw new InvalidOperationException("Activation target identity changed");
+        if(DesktopName()!="Default" || InputDesktopName()!="Default") throw new InvalidOperationException("Interactive Default desktop is unavailable");
+        foreach(int key in new int[]{0x1b,0x10,0x11,0x12,0x5b,0x5c})
+            if((GetAsyncKeyState(key)&0x8000)!=0) throw new InvalidOperationException("User key is held; stopping activation");
+        if(GetForegroundWindow()==hwnd) return "AlreadyForeground";
+        if(IsIconic(hwnd)) ShowWindowAsync(hwnd,9);
+        SetForegroundWindow(hwnd);
+        System.Threading.Thread.Sleep(250);
+        if(GetForegroundWindow()==hwnd) return "SetForegroundWindow";
+        BringWindowToTop(hwnd);
+        System.Threading.Thread.Sleep(150);
+        if(GetForegroundWindow()==hwnd) return "BringWindowToTop";
+        // Use a real, exposed caption hit, never a stale pixel or a click in another app.
+        Rect bounds;
+        if(!GetWindowRect(hwnd,out bounds) || IsIconic(hwnd)) return "ActivationDenied";
+        var timer=System.Diagnostics.Stopwatch.StartNew();
+        for(int y=bounds.Top+12;y<Math.Min(bounds.Top+60,bounds.Bottom);y+=12) {
+            for(int x=bounds.Left+80;x<bounds.Right-160;x+=40) {
+                if(timer.ElapsedMilliseconds>2500) return "ActivationDenied";
+                IntPtr hit=WindowFromPoint(new Point{X=x,Y=y});
+                if(hit!=hwnd && GetAncestor(hit,2)!=hwnd) continue;
+                UIntPtr answer;
+                IntPtr packed=new IntPtr(unchecked((int)(((uint)(ushort)y<<16)|(ushort)x)));
+                if(SendMessageTimeout(hwnd,0x84,UIntPtr.Zero,packed,2,80,out answer)==IntPtr.Zero || answer.ToUInt64()!=2) continue;
+                if((GetAsyncKeyState(0x1b)&0x8000)!=0) throw new InvalidOperationException("User pressed Escape");
+                hit=WindowFromPoint(new Point{X=x,Y=y});
+                if(hit!=hwnd && GetAncestor(hit,2)!=hwnd) continue;
+                if(!SetCursorPos(x,y)) return "ActivationDenied";
+                var down=new Input(); down.Type=0; down.Data.Mouse.Flags=2;
+                var up=new Input(); up.Type=0; up.Data.Mouse.Flags=4;
+                if(SendInput(2,new Input[]{down,up},Marshal.SizeOf(typeof(Input)))!=2) {
+                    SendInput(1,new Input[]{up},Marshal.SizeOf(typeof(Input)));
+                    throw new InvalidOperationException("Caption activation outcome unknown");
+                }
+                System.Threading.Thread.Sleep(250);
+                return GetForegroundWindow()==hwnd?"CaptionMouseClick":"ActivationDenied";
+            }
+        }
+        return "ActivationDenied";
+    }
     public static GuiInfo GetMenuState(IntPtr hwnd) {
         uint pid; uint threadId=GetWindowThreadProcessId(hwnd,out pid);
         if (threadId==0) throw new InvalidOperationException("Target window is no longer available");
@@ -68,6 +125,36 @@ public static class DingRpa {
     }
     static Input Key(ushort key,bool up) {
         var input=new Input(); input.Type=1; input.Data.Keyboard.Key=key; input.Data.Keyboard.Flags=up?2u:0u; return input;
+    }
+    static void AssertTextInputTarget(IntPtr hwnd) {
+        if(hwnd==IntPtr.Zero || GetForegroundWindow()!=hwnd) throw new InvalidOperationException("Text target window lost focus");
+        foreach(int key in new int[]{0x1b,0x10,0x11,0x12,0x5b,0x5c})
+            if((GetAsyncKeyState(key)&0x8000)!=0) throw new InvalidOperationException("User key is held; stopping text input");
+    }
+    // The caller must first verify the focused editor and its existing value through UIA.
+    public static void PressEnter(IntPtr hwnd) {
+        AssertTextInputTarget(hwnd);
+        var inputs=new Input[]{Key(0x0d,false),Key(0x0d,true)};
+        if(SendInput(2,inputs,Marshal.SizeOf(typeof(Input)))!=2) {
+            SendInput(1,new Input[]{Key(0x0d,true)},Marshal.SizeOf(typeof(Input)));
+            throw new InvalidOperationException("Enter input outcome unknown; inspect before retrying");
+        }
+    }
+    public static void TypeUnicodeText(IntPtr hwnd,string text) {
+        if(String.IsNullOrEmpty(text) || text.Length>1000) throw new ArgumentException("Text length must be 1 through 1000");
+        foreach(char character in text)
+            if(Char.IsControl(character)) throw new ArgumentException("Control characters are not allowed");
+        AssertTextInputTarget(hwnd);
+        foreach(char character in text) {
+            AssertTextInputTarget(hwnd);
+            var down=new Input(); down.Type=1; down.Data.Keyboard.Scan=character; down.Data.Keyboard.Flags=4;
+            var up=down; up.Data.Keyboard.Flags=6;
+            if(SendInput(2,new Input[]{down,up},Marshal.SizeOf(typeof(Input)))!=2) {
+                SendInput(1,new Input[]{up},Marshal.SizeOf(typeof(Input)));
+                throw new InvalidOperationException("Text input outcome unknown; inspect before retrying");
+            }
+            System.Threading.Thread.Sleep(15);
+        }
     }
     public static uint OpenSystemMenu(IntPtr hwnd) {
         if (GetForegroundWindow()!=hwnd) throw new InvalidOperationException("Target window lost focus");

@@ -1,13 +1,18 @@
 ﻿[CmdletBinding()]
 param(
-    [ValidateSet('AppCenterLowCode','Inspect')][string]$Scenario='AppCenterLowCode',
+    [ValidateSet('DouyinComment','DouyinInspect','AppCenterLowCode','Inspect')][string]$Scenario='DouyinComment',
     [string]$ConfigPath,
     [string]$EvidenceRoot,
     [switch]$WaitForKey,
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$Publish,[switch]$Continuous,[ValidateRange(0,1000000)][int]$MaxVideos=1,[string]$StateRoot
 )
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
+if($Scenario -like 'Douyin*'){
+    & (Join-Path $PSScriptRoot 'Invoke-DouyinRpa.ps1') -ConfigPath $ConfigPath -EvidenceRoot $EvidenceRoot -StateRoot $StateRoot -Publish:$Publish -Continuous:$Continuous -MaxVideos $MaxVideos -Inspect:($Scenario -eq 'DouyinInspect') -SelfTest:$SelfTest -WaitForKey:$WaitForKey
+    exit $LASTEXITCODE
+}
 $RpaVersion=(Get-Content -LiteralPath (Join-Path $projectRoot 'VERSION') -Raw).Trim()
 . (Join-Path $projectRoot 'src\core\Configuration.ps1')
 if(-not $ConfigPath){$ConfigPath=Join-Path $projectRoot 'config\dingtalk.json'}
