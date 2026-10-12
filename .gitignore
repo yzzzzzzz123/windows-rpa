@@ -1,0 +1,6 @@
+evidence/
+work/
+*.log
+*.tmp
+.env
+.env.*
