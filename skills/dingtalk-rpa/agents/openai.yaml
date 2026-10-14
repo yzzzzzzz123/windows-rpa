@@ -1,0 +1,4 @@
+interface:
+  display_name: "钉钉导航 RPA"
+  short_description: "直接执行钉钉应用中心、低代码平台导航、滚动及搜索框输入 test"
+  default_prompt: "使用 $dingtalk-rpa 直接开始任务，进入应用中心和低代码平台、向下滚动并在搜索框输入 test，报告实际结果。"

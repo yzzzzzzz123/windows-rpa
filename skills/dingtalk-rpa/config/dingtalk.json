@@ -1,0 +1,15 @@
+{
+  "SchemaVersion": 1,
+  "ApplicationCenter": {
+    "AutomationId": "navigator_view.AppCenter",
+    "Name": "应用中心",
+    "MoreAutomationId": "navigator_view.internal__more",
+    "MoreName": "更多",
+    "MoreWindowAutomationId": "navigator_view.navigator_more_view",
+    "MoreItemAutomationId": "navigator_view.navigator_more_view.scroll_area_.qt_scrollarea_viewport.content_widget_.AppCenter"
+  },
+  "LowCode": { "Name": "低代码平台" },
+  "SearchInput": { "Name": "搜索想要的应用", "Text": "test" },
+  "Timing": { "PageLoadMilliseconds": 3000, "FocusWaitMilliseconds": 6000, "LabelAttempts": 8, "LabelWaitMilliseconds": 600 },
+  "Scroll": { "MaxWheelRounds": 40, "WheelWaitMilliseconds": 450, "UnchangedFrameLimit": 3 }
+}

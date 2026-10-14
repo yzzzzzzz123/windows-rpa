@@ -1,6 +1,6 @@
-evidence/
-work/
-dist/
+/data/
+/artifacts/
+**/data/
 *.log
 *.tmp
 .env

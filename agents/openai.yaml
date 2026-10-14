@@ -1,6 +1,0 @@
-interface:
-  display_name: "抖音原生 RPA"
-  short_description: "由 AI 配置和驱动抖音评论 RPA，支持自动切回、状态查询与暂停停止"
-  default_prompt: "使用 $windows-rpa，根据我给出的选题和评论内容配置任务，执行并检查运行结果。"
-policy:
-  allow_implicit_invocation: true

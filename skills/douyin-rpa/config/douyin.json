@@ -1,0 +1,17 @@
+{
+  "SchemaVersion": 1,
+  "SearchTerms": ["AI自动剪辑", "AI智能剪辑", "AI剪辑工作流", "AI分镜设计", "AI分镜脚本", "AI分镜生成", "AI视频工作流", "AI画布工作流", "AI节点式视频创作", "AI视频剪辑", "AI分镜创作", "AI无限画布"],
+  "MatchAny": ["剪辑", "分镜", "无限画布", "画布", "视频工作流", "节点"],
+  "Comment": "sparnow，感兴趣可以来了解。",
+  "Browser": {"ProcessName": "chrome", "TitleContains": "抖音", "AutoActivate": true},
+  "Timing": {"PageWaitSeconds": 20, "CommentIntervalSeconds": 60, "EmptyQueueWaitSeconds": 0},
+  "Discovery": {"MaxScrollRounds": 3, "MaxVideosPerSearch": 12},
+  "Selectors": {
+    "AddressAutomationId": "view_1012",
+    "CommentCardAutomationId": "videoSideCard",
+    "EditorClass": "notranslate public-DraftEditor-content",
+    "Placeholder": "留下你的精彩评论吧",
+    "CommentButtonClassToken": "p9sQWW6T",
+    "SendButtonClasses": ["wchsYBpK jfGCpJo0", "oXIqR6qH OcDpqUTc"]
+  }
+}

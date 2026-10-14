@@ -2,37 +2,33 @@
 param()
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$psFiles=@(Get-ChildItem -LiteralPath $projectRoot -Recurse -Filter '*.ps1' -File | Where-Object {$_.FullName -notmatch '[\\/](evidence|work|dist)[\\/]'})
+$psFiles=@(foreach($directory in @('skills','shared','scripts','tests')){Get-ChildItem -LiteralPath (Join-Path $projectRoot $directory) -Recurse -Filter '*.ps1' -File})
 foreach($file in $psFiles){
     $tokens=$null;$errors=$null
     $null=[Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)
-    if($errors.Count -gt 0){throw ($file.Name+': '+($errors.Message -join '; '))}
+    if($errors.Count -gt 0){throw ($file.FullName+': '+($errors.Message -join '; '))}
     $bytes=[IO.File]::ReadAllBytes($file.FullName)
     if($bytes.Length -lt 3 -or $bytes[0] -ne 239 -or $bytes[1] -ne 187 -or $bytes[2] -ne 191){throw ('PowerShell 5.1 中文脚本需要 UTF-8 BOM：'+$file.Name)}
 }
-. (Join-Path $projectRoot 'src\core\Configuration.ps1')
-$null=Read-RpaConfiguration (Join-Path $projectRoot 'config\dingtalk.json')
-$testDir=Join-Path $projectRoot ('work\verify-'+[Guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $testDir -Force | Out-Null
-$original=Get-Content -LiteralPath (Join-Path $projectRoot 'config\dingtalk.json') -Raw -Encoding UTF8
-$invalidCases=@($original.Replace('"MaxWheelRounds": 40','"MaxWheelRounds": 0'),$original.Replace('navigator_view.AppCenter','unrelated.button'),$original.Replace('"LabelAttempts": 8','"LabelAttempts": 1.5'))
-foreach($case in $invalidCases){
-    $path=Join-Path $testDir 'invalid.json'
-    [IO.File]::WriteAllText($path,$case,(New-Object Text.UTF8Encoding($false)))
-    $rejected=$false
-    try{$null=Read-RpaConfiguration $path}catch{$rejected=$true}
-    if(-not $rejected){throw '无效配置未被拒绝。'}
-}
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-& $powershell -NoProfile -File (Join-Path $projectRoot 'scripts\Invoke-Rpa.ps1') -SelfTest -EvidenceRoot (Join-Path $testDir 'evidence')
-if($LASTEXITCODE -ne 0){throw '原生接口自检失败。'}
-$reportPath=Get-ChildItem -LiteralPath (Join-Path $testDir 'evidence') -Filter result.json -File -Recurse | Select-Object -First 1
-$report=Get-Content -LiteralPath $reportPath.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-if($report.Status -ne 'SelfTestPassed' -or $report.DesktopInputPerformed -ne $false){throw '自检结果异常。'}
-& $powershell -NoProfile -File (Join-Path $projectRoot 'tests\Verify-Douyin.ps1')
-if($LASTEXITCODE -ne 0){throw '抖音状态与输入保护检查失败。'}
-& $powershell -NoProfile -File (Join-Path $projectRoot 'tests\Verify-Skill.ps1')
-if($LASTEXITCODE -ne 0){throw 'Skill 后台控制与独立运行检查失败。'}
-& $powershell -NoProfile -File (Join-Path $projectRoot 'tests\Verify-Monitor.ps1')
-if($LASTEXITCODE -ne 0){throw '持续监控检查失败。'}
-[pscustomobject]@{Status='Passed';ParsedScripts=$psFiles.Count;InvalidConfigurationsRejected=$invalidCases.Count;NativeCompile=$true;DesktopActions=0;TestReport=$reportPath.FullName}
+$checks=@(
+    'skills\douyin-rpa\tests\Verify-Keywords.ps1',
+    'skills\douyin-rpa\tests\Verify-Douyin.ps1',
+    'skills\douyin-rpa\tests\Verify-Skill.ps1',
+    'skills\douyin-rpa\tests\Verify-Monitor.ps1',
+    'skills\douyin-reply-rpa\tests\Verify-ReplyCore.ps1',
+    'skills\douyin-reply-rpa\tests\Verify-ReplySession.ps1',
+    'skills\douyin-reply-rpa\tests\Verify-ReplyUi.ps1',
+    'skills\douyin-reply-rpa\tests\Verify-ReplyRouting.ps1',
+    'skills\douyin-reply-rpa\tests\Verify-ReplyWorkflow.ps1',
+    'skills\dingtalk-rpa\tests\Verify-Configuration.ps1',
+    'skills\dingtalk-rpa\tests\Verify-DingTalkSkill.ps1',
+    'skills\dingtalk-rpa\tests\Verify-DingTalkNavigation.ps1',
+    'skills\dingtalk-rpa\tests\Verify-DingTalkSearch.ps1',
+    'tests\Verify-Layout.ps1'
+)
+foreach($check in $checks){
+    & $powershell -NoProfile -File (Join-Path $projectRoot $check)
+    if($LASTEXITCODE -ne 0){throw ('验证失败：'+$check)}
+}
+[pscustomobject]@{Status='Passed';ParsedScripts=$psFiles.Count;TestSuites=$checks.Count;DesktopActions=0}

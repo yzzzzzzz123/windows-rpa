@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音评论区定向回复"
+  short_description: "AI 筛选明确需求并持续直接回复，发送间隔 10 秒，无默认数量上限"
+  default_prompt: "使用 $douyin-reply-rpa，持续筛选评论区明确需求并自然回复 Sparnow，无需逐次确认；发送及成功后进入下一视频的间隔为 10 秒，未成功立即继续，不设默认累计数量上限；用户明确要求持久目标时创建并保持系统目标 active，直到用户暂停、停止或修改目标。"
