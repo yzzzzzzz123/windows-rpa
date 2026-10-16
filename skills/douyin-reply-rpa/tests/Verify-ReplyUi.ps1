@@ -9,7 +9,7 @@ function Assert-Parsing([bool]$Condition,[string]$Message){if(-not $Condition){t
 function New-FixtureNode([int]$Index,[int]$Parent,[string]$Type,[string]$Name='', [string]$Id='', [string]$Class='', [string]$Value='', [bool]$Offscreen=$false){
     return [pscustomobject]@{Index=$Index;Parent=$Parent;Type=('ControlType.'+$Type);Name=$Name;Id=$Id;Class=$Class;Value=$Value;Offscreen=$Offscreen;Bounds='0,0,100,20'}
 }
-function New-FixtureComment([int]$Start,[string]$CommentId='1234567890123456701',[string]$Author='示例用户',[string]$Body="想做AI视频`n怎样保持人物一致？🤔",[string]$Url='https://www.douyin.com/user/example_a/'){
+function New-FixtureComment([int]$Start,[string]$CommentId='1234567890123456701',[string]$Author='示例用户',[string]$Body="想找动漫资源`n哪里能免费看？🤔",[string]$Url='https://www.douyin.com/user/example_a/'){
     New-FixtureNode $Start 0 'Hyperlink' ($Author+'头像') -Value $Url
     New-FixtureNode ($Start+1) 0 'Hyperlink' $Author -Value $Url
     New-FixtureNode ($Start+2) 0 'Group' -Id ('tooltip_'+$CommentId) -Class 'fBKZfpyn'
@@ -21,14 +21,14 @@ function New-FixtureComment([int]$Start,[string]$CommentId='1234567890123456701'
     New-FixtureNode ($Start+8) ($Start+7) 'Text' '回复'
 }
 function Read-Fixture([object[]]$Nodes){
-    return @(ConvertFrom-ReplyCommentNodes -Nodes $Nodes -VideoId '1234567890123456789' -VideoTitle 'AI 视频教程' -VideoUrl 'https://www.douyin.com/video/1234567890123456789')
+    return @(ConvertFrom-ReplyCommentNodes -Nodes $Nodes -VideoId '1234567890123456789' -VideoTitle '动漫片段' -VideoUrl 'https://www.douyin.com/video/1234567890123456789')
 }
 function Copy-Fixture([object[]]$Nodes){return @($Nodes | ConvertTo-Json -Depth 8 | ConvertFrom-Json)}
 $card=New-FixtureNode 0 -1 'Group' -Id 'videoSideCard'
 $single=@($card)+@(New-FixtureComment 10)
 $first=@(Read-Fixture $single)
 Assert-Parsing ($first.Count -eq 1) '标准扁平评论未解析。'
-Assert-Parsing ($first[0].Text -ceq "想做AI视频`n怎样保持人物一致？🤔[捂脸]") '正文换行或表情没有逐字保留。'
+Assert-Parsing ($first[0].Text -ceq "想找动漫资源`n哪里能免费看？🤔[捂脸]") '正文换行或表情没有逐字保留。'
 Assert-Parsing ($first[0].AuthorName -ceq '示例用户' -and $first[0].AuthorUrl -ceq 'https://www.douyin.com/user/example_a') '头像被选作作者，或作者地址未规范化。'
 Assert-Parsing ($first[0].CandidateId -ceq (Get-ReplyIdentityHash '1234567890123456789|1234567890123456701') -and $first[0].AuthorKey -ceq (Get-ReplyIdentityHash 'https://www.douyin.com/user/example_a')) '候选或用户哈希与核心契约不符。'
 Assert-Parsing ($first[0].ReplyNodeIndex -eq 17 -and $first[0].MarkerNodeIndex -eq 12) '回复或评论标记定位索引错误。'
@@ -92,14 +92,14 @@ Assert-Parsing ((Get-ReplyRecipientLabel -Nodes $recipientNodes) -ceq '回复@�
 $clippedEmojiNodes=@(
     (New-FixtureNode 0 -1 'Group' -Id 'videoSideCard'),
     (New-FixtureNode 200 0 'Group' -Class 'ZWk5Ao93'),
-    (New-FixtureNode 201 200 'Text' '回复@示例用户: 画布连线太乱，有整理方法吗'),
+    (New-FixtureNode 201 200 'Text' '回复@示例用户: 这部动漫的后几集哪里能看'),
     (New-FixtureNode 202 200 'Image' '[捂脸]' -Class 'qz6Hz920' -Offscreen $true),
     (New-FixtureNode 203 200 'Image' '[捂脸]' -Class 'qz6Hz920' -Offscreen $true),
     (New-FixtureNode 204 200 'Image' '[捂脸]' -Class 'qz6Hz920' -Offscreen $true),
     (New-FixtureNode 205 200 'Image' -Class 'DADTc4UZ'),
     (New-FixtureNode 206 200 'Group' -Class 'comment-input-inner-container')
 )
-Assert-Parsing ((Get-ReplyRecipientLabel -Nodes $clippedEmojiNodes) -ceq '回复@示例用户: 画布连线太乱，有整理方法吗[捂脸][捂脸][捂脸]') '侧栏裁切的尾部表情使完整回复提示无法重建。'
+Assert-Parsing ((Get-ReplyRecipientLabel -Nodes $clippedEmojiNodes) -ceq '回复@示例用户: 这部动漫的后几集哪里能看[捂脸][捂脸][捂脸]') '侧栏裁切的尾部表情使完整回复提示无法重建。'
 foreach($case in @('hidden-header','hidden-close','hidden-input','unknown-clipped-image','empty-clipped-emoji','emoji-outside-footer')){
     $nodes=Copy-Fixture $clippedEmojiNodes
     switch($case){
@@ -112,7 +112,7 @@ foreach($case in @('hidden-header','hidden-close','hidden-input','unknown-clippe
     }
     $label=Get-ReplyRecipientLabel -Nodes $nodes
     if($case -eq 'emoji-outside-footer'){
-        Assert-Parsing ($label -ceq '回复@示例用户: 画布连线太乱，有整理方法吗[捂脸][捂脸]') '回复提示混入页脚外的表情，可能掩盖正文不一致。'
+        Assert-Parsing ($label -ceq '回复@示例用户: 这部动漫的后几集哪里能看[捂脸][捂脸]') '回复提示混入页脚外的表情，可能掩盖正文不一致。'
     }else{Assert-Parsing ($null -eq $label) ('裁切兼容误接受不确定回复提示：'+$case)}
 }
 $plainHeader=Copy-Fixture $recipientNodes

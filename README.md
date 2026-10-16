@@ -5,7 +5,7 @@
 | Skill | 能力 | AI 入口 |
 | --- | --- | --- |
 | [douyin-rpa](skills/douyin-rpa/SKILL.md) | 按选题发现抖音视频、评论预演与授权发布、持续运行、暂停恢复停止和监控 | `skills/douyin-rpa/scripts/Invoke-DouyinSkill.ps1` |
-| [douyin-reply-rpa](skills/douyin-reply-rpa/SKILL.md) | 读取评论区候选，由当前 AI 判断明确需求并生成提到 Sparnow 的自然回复，支持预演、默认直接发布定向回复及暂停恢复停止 | `skills/douyin-reply-rpa/scripts/Invoke-DouyinReplySkill.ps1` |
+| [douyin-reply-rpa](skills/douyin-reply-rpa/SKILL.md) | 读取动漫评论区候选，宽容筛选找番、哪里看、求推荐及播放困难，生成提到漫映免费动漫资源分享的自然回复，支持预演、默认直接发布定向回复及暂停恢复停止 | `skills/douyin-reply-rpa/scripts/Invoke-DouyinReplySkill.ps1` |
 | [dingtalk-rpa](skills/dingtalk-rpa/SKILL.md) | 应用中心 → 低代码平台 → 向下滚动 → 搜索框输入 test | `skills/dingtalk-rpa/scripts/Invoke-DingTalkRpa.ps1` |
 
 ## 目录归属
@@ -53,7 +53,7 @@ windows-rpa/
 
 抖音任务 JSON、预演与发布授权、暂停恢复停止规则见 [运行协议](skills/douyin-rpa/references/operations.md)。真实发布必须显式选择 Publish 并提供评论；每次提交至少间隔 60 秒。Submitted 只表示执行过发送动作，不能当作平台可见性已确认。
 
-定向回复采用 `Discover → 当前 AI 决策 → Preview/Publish`。Discover 按单视频有界读取真实评论，当前 AI 根据原评论是否明确表达 AI 视频制作、剪辑或无限画布需求筛选用户，并逐条写一句自然回复、提到 Sparnow。关键词只帮助缩小候选范围；后台 RPA 不调用模型，持续筛选由当前 AI 与用户明确要求的系统持久目标推进。回复任务引用同一数据目录中 Discover 生成的候选，绑定作者、原评论和具体回复文本。按用户设定，定向回复默认直接 Publish 并持续处理，无需逐次发送授权或文案确认；发送点击及成功后进入下一视频的最小间隔均为 10 秒，未指定数量时没有累计上限。用户明确指定数量、指定批次、只发现或预演时按该范围执行；单独维护、测试或构建不触发真实发送。持续进度保存在本 Skill 的 `state/persistent-goal.json`，接续沿用真实账本与下一视频截止时间。从 WSL/Windows 会话 0 调用定向回复 Start 时，默认经单次任务计划程序桥接到同账号已登录的活动会话；仍要求桌面解锁，取得回执后删除桥接任务。具体任务格式见 [回复 Skill](skills/douyin-reply-rpa/SKILL.md)。
+定向回复采用 `Discover → 当前 AI 决策 → Preview/Publish`。Discover 按单视频有界读取真实评论，当前 AI 采用宽容口径筛选问哪里看、求番名、求推荐、想看想追或有来源与播放困难的用户，不要求明确提到免费，并逐条直接回应原问题、提到漫映；文案用短句，免费和资源多按需提，不复述提问或套品牌介绍。对外回复直接提“漫映Manying”，不写“公众号”等入口标签，不保证具体作品或全集可用。关键词只帮助缩小候选范围；后台 RPA 不调用模型，持续筛选由当前 AI 与用户明确要求的系统持久目标推进。回复任务引用同一数据目录中 Discover 生成的候选，绑定作者、原评论和具体回复文本。按用户设定，定向回复默认直接 Publish 并持续处理，无需逐次发送授权或文案确认；发送点击及成功后进入下一视频的最小间隔均为 10 秒，未指定数量时没有累计上限。用户明确指定数量、指定批次、只发现或预演时按该范围执行；单独维护、测试或构建不触发真实发送。持续进度保存在本 Skill 的 `state/persistent-goal.json`，接续沿用真实账本与下一视频截止时间。从 WSL/Windows 会话 0 调用定向回复 Start 时，默认经单次任务计划程序桥接到同账号已登录的活动会话；仍要求桌面解锁，取得回执后删除桥接任务。具体任务格式见 [回复 Skill](skills/douyin-reply-rpa/SKILL.md)。
 
 原抖音评论和钉钉的手动双击入口在各自的 `launchers` 目录；定向回复通过 Skill 的 AI 控制入口使用。钉钉默认直接 Run；其搜索框只输入 test，不按回车。
 

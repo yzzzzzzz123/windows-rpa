@@ -2,7 +2,18 @@
     $temporary=$Path+'.'+[Guid]::NewGuid().ToString('N')+'.tmp'
     try{
         [IO.File]::WriteAllText($temporary,(ConvertTo-Json -InputObject $Value -Depth 20),(New-Object Text.UTF8Encoding($false)))
-        if(Test-Path -LiteralPath $Path){[IO.File]::Replace($temporary,$Path,[NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
+        # Windows 的短暂文件占用可能阻止原子替换；只重试保存同一份快照，不重放业务动作。
+        for($attempt=0;$attempt -lt 8;$attempt++){
+            try{
+                if(Test-Path -LiteralPath $Path){[IO.File]::Replace($temporary,$Path,[NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
+                break
+            }catch [IO.IOException]{
+                $failure=$_.Exception
+                while($failure.InnerException){$failure=$failure.InnerException}
+                if($attempt -ge 7 -or ($failure.HResult -band 65535) -notin @(5,32,33,1175) -or -not (Test-Path -LiteralPath $temporary)){throw}
+                Start-Sleep -Milliseconds 50
+            }
+        }
     }finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force}}
 }
 function Initialize-ReplyState([string]$StateRoot,[string]$SharedSubmissionRoot) {
@@ -37,7 +48,7 @@ function New-ReplySubmissionClaim($Candidate,[string]$ReplyText) {
     if(-not $script:RpaRunLock){throw '未持有共享桌面锁，拒绝创建提交标记。'}
     Assert-ReplyCandidate $Candidate
     Assert-ReplyText $ReplyText 300 'ReplyText'
-    if($ReplyText -notmatch '(?i)Sparnow'){throw '回复必须提到 Sparnow。'}
+    Assert-ReplyPromotionName $ReplyText
     $candidatePath=Get-ReplyLedgerPath $Candidate.CandidateId
     $userPath=Get-ReplyUserLedgerPath $Candidate.AuthorKey
     if(Test-ReplyAlreadyContacted $Candidate){throw '该评论或用户已有提交记录；未知结果也不得重试。'}

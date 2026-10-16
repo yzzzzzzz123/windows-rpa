@@ -19,7 +19,17 @@ function Write-ReplyJson($Value,[string]$Path) {
     $temporary=$Path+'.'+[Guid]::NewGuid().ToString('N')+'.tmp'
     try{
         [IO.File]::WriteAllText($temporary,(ConvertTo-Json -InputObject $Value -Depth 20),(New-Object Text.UTF8Encoding($false)))
-        if(Test-Path -LiteralPath $Path){[IO.File]::Replace($temporary,$Path,[NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
+        for($attempt=0;$attempt -lt 8;$attempt++){
+            try{
+                if(Test-Path -LiteralPath $Path){[IO.File]::Replace($temporary,$Path,[NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
+                break
+            }catch [IO.IOException]{
+                $failure=$_.Exception
+                while($failure.InnerException){$failure=$failure.InnerException}
+                if($attempt -ge 7 -or ($failure.HResult -band 65535) -notin @(5,32,33,1175) -or -not (Test-Path -LiteralPath $temporary)){throw}
+                Start-Sleep -Milliseconds 50
+            }
+        }
     }finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force}}
 }
 function Get-ReplyEnvironment([string]$DataRoot) {

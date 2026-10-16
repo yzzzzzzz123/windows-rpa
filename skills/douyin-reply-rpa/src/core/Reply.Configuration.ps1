@@ -11,6 +11,11 @@ function Get-ReplyIdentityHash([string]$Value) {
     $sha=[Security.Cryptography.SHA256]::Create()
     try{return (($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Value)) | ForEach-Object {$_.ToString('x2')}) -join '')}finally{$sha.Dispose()}
 }
+function Assert-ReplyPromotionName([string]$ReplyText) {
+    if($ReplyText -notmatch '漫映'){throw '回复必须提到漫映。'}
+    if($ReplyText -match '(?i)满映\s*Manying'){throw '公众号名称写错，请使用漫映Manying。'}
+    if($ReplyText -match '公\s*众\s*号'){throw '对外回复直接使用漫映Manying，不明说公众号。'}
+}
 function Assert-ReplyCandidate($Candidate) {
     if($Candidate -isnot [pscustomobject]){throw '候选评论必须为 JSON 对象。'}
     if($Candidate.CandidateId -isnot [string] -or $Candidate.CandidateId -cnotmatch '^[a-f0-9]{64}$'){throw 'CandidateId 必须为 SHA256 小写十六进制。'}
@@ -49,7 +54,7 @@ function Assert-ReplyConfiguration($Config) {
             Assert-ReplyCandidate $reply
             Assert-ReplyText $reply.ReplyText 300 'ReplyText'
             Assert-ReplyText $reply.Reason 1000 'Reason'
-            if($reply.ReplyText -notmatch '(?i)Sparnow'){throw '每条回复必须提到 Sparnow。'}
+            Assert-ReplyPromotionName $reply.ReplyText
             if($ids.ContainsKey($reply.CandidateId) -or $authors.ContainsKey($reply.AuthorKey)){throw '同批次不能重复回复同一评论或同一用户。'}
             $ids[$reply.CandidateId]=$true;$authors[$reply.AuthorKey]=$true
         }
