@@ -2,15 +2,35 @@
 # 先加载 Urls.ps1、DingRpa、UIAutomationClient/UIAutomationTypes 及 shared/core/Screenshot.ps1。
 # 调用方提供 Config.Browser、Config.Selectors、Config.Timing、RunDirectory、VideoEvidence，
 # 并提供 Assert-RpaRunning、Wait-RpaDelay、Write-RpaStateJson；本文件不启动任务或发布评论。
+function Test-DouyinProfileCommandLine([string]$CommandLine,[string]$UserDataDirectory) {
+    if(-not $CommandLine -or -not $UserDataDirectory){return $false}
+    # 仅接受独立参数；拒绝缺失、重复、相邻目录和同名参数的子串。
+    $switches=[regex]::Matches($CommandLine,'(?i)(?:^|\s)(?:"--user-data-dir(?:=|"|\s)|--user-data-dir(?:=|\s|$))')
+    $values=[regex]::Matches($CommandLine,'(?i)(?:^|\s)(?:"--user-data-dir=(?<value>[^"]+)"|--user-data-dir(?:=|\s+)(?:"(?<value>[^"]+)"|(?<value>[^\s"]+)))(?=\s|$)')
+    if($switches.Count -ne 1 -or $values.Count -ne 1){return $false}
+    try{
+        $actual=$values[0].Groups['value'].Value
+        if(-not [IO.Path]::IsPathRooted($actual) -or -not [IO.Path]::IsPathRooted($UserDataDirectory)){return $false}
+        return [string]::Equals([IO.Path]::GetFullPath($actual).TrimEnd('\'),[IO.Path]::GetFullPath($UserDataDirectory).TrimEnd('\'),[StringComparison]::OrdinalIgnoreCase)
+    }catch{return $false}
+}
+function Test-DouyinProcessProfile([int]$ProcessId,[string]$UserDataDirectory) {
+    try{
+        $process=Get-CimInstance Win32_Process -Filter ('ProcessId='+$ProcessId) -ErrorAction Stop
+        return ($process.Name -eq 'chrome.exe' -and (Test-DouyinProfileCommandLine $process.CommandLine $UserDataDirectory))
+    }catch{return $false}
+}
 function Initialize-DouyinBrowser {
     if([DingRpa]::DesktopName() -ne 'Default' -or [DingRpa]::InputDesktopName() -ne 'Default'){throw '当前不是已解锁的 Default 桌面，停止原生 RPA。'}
     $null=[DingRpa]::SetProcessDPIAware()
     $candidates=@([DingRpa]::ListWindows() | Where-Object {
-        $_.Visible -and $_.Title.Contains($Config.Browser.TitleContains) -and (Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue).ProcessName -eq $Config.Browser.ProcessName
+        $_.Visible -and $_.Title.Contains($Config.Browser.TitleContains) -and (Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue).ProcessName -eq $Config.Browser.ProcessName -and
+        (-not $Config.Browser.UserDataDirectory -or (Test-DouyinProcessProfile $_.ProcessId $Config.Browser.UserDataDirectory))
     })
-    if($candidates.Count -ne 1){throw '请打开唯一的抖音 Chrome 窗口；不能从零个或多个候选中猜测目标。'}
+    if($candidates.Count -ne 1){throw '请打开唯一符合配置的抖音 Chrome 窗口；配置了独立 profile 时不会回退到个人浏览器。'}
     $script:BrowserWindow=$candidates[0]
     $script:BrowserHandle=[IntPtr]$script:BrowserWindow.Handle
+    $script:BrowserProcessStartTicks=(Get-Process -Id $script:BrowserWindow.ProcessId -ErrorAction Stop).StartTime.ToUniversalTime().Ticks
     $script:ExpectedVideoId=$null
     Ensure-DouyinForeground
 }
@@ -19,6 +39,8 @@ function Assert-DouyinIdentity {
     if([DingRpa]::DesktopName() -ne 'Default' -or [DingRpa]::InputDesktopName() -ne 'Default'){throw '桌面已锁定或切换，停止输入。'}
     $window=[DingRpa]::ReadWindow($script:BrowserHandle)
     if($window.ProcessId -ne $script:BrowserWindow.ProcessId -or (Get-Process -Id $window.ProcessId -ErrorAction SilentlyContinue).ProcessName -ne 'chrome'){throw 'Chrome 目标进程或句柄已变化。'}
+    if($script:BrowserProcessStartTicks -and (Get-Process -Id $window.ProcessId -ErrorAction Stop).StartTime.ToUniversalTime().Ticks -ne $script:BrowserProcessStartTicks){throw 'Chrome 目标进程已重建，停止输入。'}
+    if($Config.Browser.UserDataDirectory -and -not (Test-DouyinProcessProfile $window.ProcessId $Config.Browser.UserDataDirectory)){throw 'Chrome 不属于指定的独立 profile，停止输入。'}
 }
 function Get-DouyinRoot {
     Assert-DouyinIdentity

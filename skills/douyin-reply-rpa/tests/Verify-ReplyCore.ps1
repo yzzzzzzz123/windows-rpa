@@ -42,6 +42,7 @@ try{
     Write-ReplyJson @($first,$sameAuthor,$otherAuthor) $candidatePath
     $configPath=Join-Path $testRoot 'normalized.json'
     $discover=New-ReplyConfiguration ([pscustomobject]@{Mode='Discover'}) $environment $configPath
+    Assert-True ($discover.Browser.UserDataDirectory -ceq (Join-Path $data 'browser-profile')) '回复任务没有绑定独立 profile。'
     Assert-True ($discover.MaxVideos -eq 1 -and $discover.MaxCommentsPerVideo -eq 30 -and $discover.MaxScrollRounds -eq 3) '发现任务默认单视频边界错误。'
     Assert-True ($discover.Timing.CommentIntervalSeconds -eq 10) '定向回复默认间隔不是 10 秒。'
     foreach($interval in @(9,0,$true,10.5)){
@@ -124,7 +125,7 @@ try{
     # 复制到临时自包含目录；唯一 worker 为无桌面等待夹具。
     $fixture=Join-Path $testRoot '中文 skill''s & $ 目录'
     foreach($sub in @('scripts','src\core','src\native','config')){$null=New-Item -ItemType Directory -Path (Join-Path $fixture $sub) -Force}
-    foreach($file in @('scripts\Reply.Core.ps1','scripts\Invoke-DouyinReplySkill.ps1','scripts\Invoke-DouyinReplySession.ps1','src\core\Reply.Session.ps1','src\native\ReplySession.cs','src\core\Reply.Configuration.ps1','src\core\Reply.State.ps1','config\reply.json')){Copy-Item -LiteralPath (Join-Path $skillRoot $file) -Destination (Join-Path $fixture $file)}
+    foreach($file in @('scripts\Reply.Core.ps1','scripts\Invoke-DouyinReplySkill.ps1','scripts\Invoke-DouyinReplySession.ps1','src\core\Reply.Session.ps1','src\core\Reply.Browser.ps1','src\native\ReplySession.cs','src\core\Reply.Configuration.ps1','src\core\Reply.State.ps1','config\reply.json')){Copy-Item -LiteralPath (Join-Path $skillRoot $file) -Destination (Join-Path $fixture $file)}
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'shared') -Destination (Join-Path $fixture 'shared') -Recurse
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'VERSION') -Destination (Join-Path $fixture 'VERSION')
     Write-ReplyJson ([ordered]@{Name='douyin-reply-rpa'}) (Join-Path $fixture 'bundle.json')

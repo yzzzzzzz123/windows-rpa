@@ -14,6 +14,7 @@ $script:RunReport=[ordered]@{JobId=$job.JobId;Mode=$job.Mode;Status='Starting';S
 $exitCode=0
 try {
     $script:Config=Read-ReplyConfiguration $job.ConfigPath
+    if(-not [string]::Equals($Config.Browser.UserDataDirectory,(Get-ReplyBrowserProfilePath $environment),[StringComparison]::OrdinalIgnoreCase)){throw '回复任务必须使用当前 DataRoot 的独立测试 profile；旧配置不能回退到个人浏览器。'}
     if($job.Mode -cne $Config.Mode){throw '任务模式与配置不一致。'}
     if($Config.Mode -ne 'Discover'){
         $source=@(Read-ReplySourceCandidates $environment $Config.SourceJobId)

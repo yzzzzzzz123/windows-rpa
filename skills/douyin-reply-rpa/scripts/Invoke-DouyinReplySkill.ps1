@@ -1,6 +1,6 @@
 ﻿[CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)][ValidateSet('Describe','Start','Status','Pause','Resume','Stop','Candidates')][string]$Action,
+    [Parameter(Mandatory=$true)][ValidateSet('Describe','Start','Status','Pause','Resume','Stop','Candidates','OpenBrowser')][string]$Action,
     [string]$TaskFile,[string]$JobId,[string]$DataRoot,
     [ValidateSet('Auto','Local','Interactive')][string]$LaunchMode='Auto'
 )
@@ -16,7 +16,7 @@ try{
         return
     }
     if($Action -eq 'Describe'){
-        $output=[ordered]@{Ok=$true;Skill='douyin-reply-rpa';Version=(Get-Content -LiteralPath $environment.VersionPath -Raw -Encoding UTF8).Trim();Paths=$environment;Defaults=(Read-ReplyJson (Join-Path $environment.RuntimeRoot 'config\reply.json'));Actions=@('Describe','Start','Status','Pause','Resume','Stop','Candidates');Modes=@('Discover','Preview','Publish');LaunchModes=@('Auto','Local','Interactive')}
+        $output=[ordered]@{Ok=$true;Skill='douyin-reply-rpa';Version=(Get-Content -LiteralPath $environment.VersionPath -Raw -Encoding UTF8).Trim();Paths=$environment;BrowserProfilePath=(Get-ReplyBrowserProfilePath $environment);Defaults=(Read-ReplyJson (Join-Path $environment.RuntimeRoot 'config\reply.json'));Actions=@('Describe','Start','Status','Pause','Resume','Stop','Candidates','OpenBrowser');Modes=@('Discover','Preview','Publish');LaunchModes=@('Auto','Local','Interactive')}
     }elseif($Action -eq 'Status'){
         $output=Get-ReplyStatus $environment $JobId
         $pendingPath=Join-Path $environment.StateRoot 'interactive-launch.json'
@@ -34,7 +34,9 @@ try{
         $dispatchLock=[IO.File]::Open((Join-Path $environment.StateRoot 'skill-dispatch.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
         $activeFile=Join-Path $environment.StateRoot 'skill-active.json'
         $active=if(Test-Path -LiteralPath $activeFile){Read-ReplyJson $activeFile}else{$null}
-        if($Action -eq 'Start'){
+        if($Action -eq 'OpenBrowser'){
+            $output=Open-ReplyBrowser $environment
+        }elseif($Action -eq 'Start'){
             $pendingPath=Join-Path $environment.StateRoot 'interactive-launch.json'
             if(Test-Path -LiteralPath $pendingPath){
                 $pending=Read-ReplyJson $pendingPath

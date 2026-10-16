@@ -17,6 +17,7 @@ $checks=@(
     'skills\douyin-rpa\tests\Verify-Skill.ps1',
     'skills\douyin-rpa\tests\Verify-Monitor.ps1',
     'skills\douyin-reply-rpa\tests\Verify-ReplyCore.ps1',
+    'skills\douyin-reply-rpa\tests\Verify-ReplyBrowser.ps1',
     'skills\douyin-reply-rpa\tests\Verify-ReplySession.ps1',
     'skills\douyin-reply-rpa\tests\Verify-ReplyUi.ps1',
     'skills\douyin-reply-rpa\tests\Verify-ReplyRouting.ps1',

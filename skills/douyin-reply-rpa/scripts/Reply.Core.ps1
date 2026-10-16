@@ -1,5 +1,6 @@
 ﻿. (Join-Path $PSScriptRoot '..\src\core\Reply.Configuration.ps1')
 . (Join-Path $PSScriptRoot '..\src\core\Reply.Session.ps1')
+. (Join-Path $PSScriptRoot '..\src\core\Reply.Browser.ps1')
 function Read-ReplyJson([string]$Path) {
     for($attempt=0;$attempt -lt 4;$attempt++){
         $stream=$null;$reader=$null
@@ -111,6 +112,7 @@ function New-ReplyConfiguration($Task,$EnvInfo,[string]$ConfigPath) {
     $allowed=if($Task.Mode -eq 'Discover'){@('Mode','SearchTerms','MatchAny','MaxVideos','MaxCommentsPerVideo','MaxScrollRounds')}else{@('Mode','SourceJobId','Replies')}
     foreach($name in $Task.PSObject.Properties.Name){if($name -notin $allowed){throw ('未知或不适用的任务字段：'+$name)}}
     $config=Read-ReplyJson (Join-Path $EnvInfo.RuntimeRoot 'config\reply.json')
+    $config.Browser|Add-Member NoteProperty UserDataDirectory (Get-ReplyBrowserProfilePath $EnvInfo) -Force
     foreach($pair in @(@('Mode',$Task.Mode),@('SourceJobId',$null),@('Replies',@()))){$config|Add-Member NoteProperty $pair[0] $pair[1] -Force}
     if($Task.Mode -eq 'Discover'){
         foreach($name in @('SearchTerms','MatchAny','MaxVideos','MaxCommentsPerVideo','MaxScrollRounds')){if($Task.PSObject.Properties.Name -contains $name){$config.$name=$Task.$name}}

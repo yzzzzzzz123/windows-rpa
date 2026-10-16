@@ -14,11 +14,16 @@ description: 在抖音视频评论区寻找明确表达 AI 视频制作、剪辑
 ```powershell
 & "$skillRoot\scripts\Invoke-DouyinReplySkill.ps1" -Action Describe
 & "$skillRoot\scripts\Invoke-DouyinReplySkill.ps1" -Action Status
+& "$skillRoot\scripts\Invoke-DouyinReplySkill.ps1" -Action OpenBrowser
 ```
+
+定向回复使用独立 Chrome 测试 profile，目录为当前 DataRoot 下的 `browser-profile`。先用 `OpenBrowser` 打开该浏览器，再由用户在其中单独登录抖音；不复制个人 profile、Cookie 或登录态。该动作只打开浏览器，不恢复暂停目标、不采集或发送。后续 Discover/Preview/Publish 均绑定该目录对应的 Chrome 进程，并在操作前复核；独立窗口缺失或不唯一时停止，不能回退到用户日常浏览器。旧任务配置未绑定独立 profile 时拒绝执行，原 DataRoot、账本与冷却记录继续保留。`OpenBrowser` 当前需要在已解锁的交互桌面会话调用；重复调用复用已有的唯一测试窗口。Profile 隔离不隔离 Windows 鼠标、键盘与前台焦点；需要同时手动使用电脑时应使用独立 Windows 会话或虚拟机。
 
 Start 默认使用 `-LaunchMode Auto`：在用户桌面直接启动；从 WSL/会话 0 调用时，通过单次 Windows 任务计划程序桥接到同一账号唯一的活动会话。无需密码、不提权、无定时触发，取得启动回执后删除桥接任务。`Local` 用于桌面直接启动或无桌面测试夹具，`Interactive` 强制使用桥接。
 
 运行前读取 [任务与回复流程](references/reply-flow.md)，其中包含 UTF-8 JSON 示例、来源绑定和结果解释。唯一控制入口为 `scripts/Invoke-DouyinReplySkill.ps1`；支持 Describe、Start、Status、Candidates、Pause、Resume、Stop。
+
+测试浏览器默认以 `--no-proxy-server` 启动，使用浏览器直连模式。复用旧实例时核验启动参数；缺少直连参数则只正常关闭并重启已确认的独立测试实例，不强制结束进程，也不修改 Windows 或个人 Chrome 的代理设置。操作系统 VPN/TUN 与网络网关仍由系统路由控制。
 
 ## AI 处理流程
 

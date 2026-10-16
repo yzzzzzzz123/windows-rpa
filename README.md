@@ -43,6 +43,9 @@ windows-rpa/
 & .\skills\douyin-reply-rpa\scripts\Invoke-DouyinReplySkill.ps1 -Action Describe
 & .\skills\douyin-reply-rpa\scripts\Invoke-DouyinReplySkill.ps1 -Action Status
 
+# 打开独立测试 Chrome，不恢复任务或发送；在该窗口单独登录抖音
+& .\skills\douyin-reply-rpa\scripts\Invoke-DouyinReplySkill.ps1 -Action OpenBrowser
+
 # 钉钉完整流程，会操作当前桌面
 & .\skills\dingtalk-rpa\scripts\Invoke-DingTalkRpa.ps1
 
@@ -53,6 +56,10 @@ windows-rpa/
 定向回复采用 `Discover → 当前 AI 决策 → Preview/Publish`。Discover 按单视频有界读取真实评论，当前 AI 根据原评论是否明确表达 AI 视频制作、剪辑或无限画布需求筛选用户，并逐条写一句自然回复、提到 Sparnow。关键词只帮助缩小候选范围；后台 RPA 不调用模型，持续筛选由当前 AI 与用户明确要求的系统持久目标推进。回复任务引用同一数据目录中 Discover 生成的候选，绑定作者、原评论和具体回复文本。按用户设定，定向回复默认直接 Publish 并持续处理，无需逐次发送授权或文案确认；发送点击及成功后进入下一视频的最小间隔均为 10 秒，未指定数量时没有累计上限。用户明确指定数量、指定批次、只发现或预演时按该范围执行；单独维护、测试或构建不触发真实发送。持续进度保存在本 Skill 的 `state/persistent-goal.json`，接续沿用真实账本与下一视频截止时间。从 WSL/Windows 会话 0 调用定向回复 Start 时，默认经单次任务计划程序桥接到同账号已登录的活动会话；仍要求桌面解锁，取得回执后删除桥接任务。具体任务格式见 [回复 Skill](skills/douyin-reply-rpa/SKILL.md)。
 
 原抖音评论和钉钉的手动双击入口在各自的 `launchers` 目录；定向回复通过 Skill 的 AI 控制入口使用。钉钉默认直接 Run；其搜索框只输入 test，不按回车。
+
+测试 Chrome 默认通过 `--no-proxy-server` 直连；OpenBrowser 会核验并在必要时正常重启该独立实例使参数生效，不修改系统代理或个人浏览器配置。系统 VPN/TUN 路由不由该参数控制。
+
+定向回复浏览器固定使用本 Skill DataRoot 下的 `browser-profile`，不复制个人 Chrome 登录态。任务按该目录核验 Chrome 进程；窗口缺失、进程身份变化或多个匹配窗口时停止，不回退到个人 profile。旧任务配置未绑定该目录时也拒绝执行；原任务数据与去重账不迁移或清空。Profile 隔离只隔离浏览器数据，原生 RPA 仍使用当前 Windows 桌面的鼠标和焦点。
 
 ## 验证与独立分发
 
