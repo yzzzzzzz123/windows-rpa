@@ -14,7 +14,7 @@ function Assert-Rejected([scriptblock]$Body,[string]$Message){$rejected=$false;t
 function Copy-Json($Value){return ($Value|ConvertTo-Json -Depth 20|ConvertFrom-Json)}
 function New-Candidate([string]$CommentId,[string]$Author){
     $video='7000000000000000001';$url='https://www.douyin.com/user/'+$Author
-    return [pscustomobject]@{CandidateId=(Get-ReplyIdentityHash ($video+'|'+$CommentId));CommentId=$CommentId;VideoId=$video;VideoUrl=('https://www.douyin.com/video/'+$video);VideoTitle='AI 视频制作流程';AuthorKey=(Get-ReplyIdentityHash $url);AuthorName=$Author;AuthorUrl=$url;Text="这个视频如何分镜？`n想学这种做法。🤔";LocatorClass='fixture-comment'}
+    return [pscustomobject]@{CandidateId=(Get-ReplyIdentityHash ($video+'|'+$CommentId));CommentId=$CommentId;VideoId=$video;VideoUrl=('https://www.douyin.com/video/'+$video);VideoTitle='动漫片段推荐';AuthorKey=(Get-ReplyIdentityHash $url);AuthorName=$Author;AuthorUrl=$url;Text="这部动漫在哪里看？`n想找免费的资源。🤔";LocatorClass='fixture-comment'}
 }
 function Call-Fixture([string]$Action,[string]$Id,[string]$TaskPath){
     $parameters=@{Action=$Action;DataRoot=$fixtureData}
@@ -28,6 +28,41 @@ function Wait-Fixture([string]$Id,[scriptblock]$Predicate){
     throw ('离线任务等待超时：'+($status|ConvertTo-Json -Compress -Depth 8))
 }
 try{
+    # 模拟短暂 Windows 读锁：替换重试成功；持续占用必须有界失败并保留原状态。
+    if(-not ('ReplyStateContentionFixture' -as [type])){
+        Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+public static class ReplyStateContentionFixture {
+    public static Task Hold(string path, int milliseconds) {
+        var ready = new ManualResetEventSlim(false);
+        var task = Task.Factory.StartNew(() => {
+            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read)) {
+                ready.Set();
+                Thread.Sleep(milliseconds);
+            }
+        });
+        if (!ready.Wait(2000)) throw new TimeoutException("Fixture did not acquire its read lock.");
+        return task;
+    }
+}
+'@
+    }
+    foreach($writer in @('Write-RpaStateJson','Write-ReplyJson')){
+        $stateProbe=Join-Path $testRoot ('atomic-state-'+$writer+'.json')
+        & $writer ([ordered]@{Sequence=0}) $stateProbe
+        $contention=[ReplyStateContentionFixture]::Hold($stateProbe,150)
+        try{& $writer ([ordered]@{Sequence=1}) $stateProbe}finally{$contention.Wait()}
+        Assert-True ((Read-ReplyJson $stateProbe).Sequence -eq 1) '短暂占用解除后未成功保存状态。'
+        $heldState=[IO.File]::Open($stateProbe,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+        try{
+            Assert-Rejected {& $writer ([ordered]@{Sequence=2}) $stateProbe} '持续占用状态文件时未有界失败。'
+            Assert-True ((Read-ReplyJson $stateProbe).Sequence -eq 1) '替换失败破坏了原状态。'
+            Assert-True (@(Get-ChildItem -LiteralPath $testRoot -Filter 'atomic-state-*.json.*.tmp').Count -eq 0) '失败后遗留了临时状态文件。'
+        }finally{$heldState.Dispose()}
+    }
     $data=Join-Path $testRoot 'data'
     $environment=[pscustomobject]@{RuntimeRoot=$skillRoot;DataRoot=$data;StateRoot=(Join-Path $data 'state');JobsRoot=(Join-Path $data 'jobs');SharedSubmissionRoot=(Join-Path $testRoot 'shared-state')}
     $sourceId='20261013_120000000-0123456789ab'
@@ -48,20 +83,20 @@ try{
         $invalidInterval=Copy-Json $discover;$invalidInterval.Timing.CommentIntervalSeconds=$interval
         Assert-Rejected {Assert-ReplyConfiguration $invalidInterval} '低于 10 秒或非整数的发送间隔未被拒绝。'
     }
-    $valid=[pscustomobject]@{Mode='Publish';SourceJobId=$sourceId;Replies=@([pscustomobject]@{CandidateId=$first.CandidateId;ReplyText='你问的分镜流程，可以了解一下 Sparnow。';Reason='原评论明确询问 AI 视频分镜制作方式。'})}
+    $valid=[pscustomobject]@{Mode='Publish';SourceJobId=$sourceId;Replies=@([pscustomobject]@{CandidateId=$first.CandidateId;ReplyText='漫映Manying搜搜，免费的。';Reason='原评论询问动漫观看渠道和免费资源。'})}
     $normalized=New-ReplyConfiguration $valid $environment $configPath
     Assert-True ($normalized.Replies.Count -eq 1 -and $normalized.Replies[0].Text -ceq $first.Text -and $normalized.Replies[0].AuthorUrl -ceq $first.AuthorUrl -and $normalized.Replies[0].CommentId -ceq $first.CommentId -and $normalized.Replies[0].LocatorClass -ceq 'fixture-comment') '候选原评论、用户身份或定位字段未保真。'
     Assert-True ((Read-ReplyConfiguration $configPath).Replies[0].ReplyText -ceq $valid.Replies[0].ReplyText) '中文配置回读不一致。'
     $invalid=@(
         [pscustomobject]@{Mode='Discover';MaxVideos=0},[pscustomobject]@{Mode='Discover';MaxVideos=$true},
         [pscustomobject]@{Mode='Discover';MaxVideos=1.5},[pscustomobject]@{Mode='Discover';MaxCommentsPerVideo=101},
-        [pscustomobject]@{Mode='Discover';MaxScrollRounds=11},[pscustomobject]@{Mode='Discover';MatchAny='剪辑'},
+        [pscustomobject]@{Mode='Discover';MaxScrollRounds=11},[pscustomobject]@{Mode='Discover';MatchAny='动漫'},
         [pscustomobject]@{Mode='Discover';SearchTerms=@("输入`n多行")},[pscustomobject]@{Mode='Discover';UnsafeOverride=$true},
         [pscustomobject]@{Mode='Publish'},[pscustomobject]@{Mode='Publish';SourceJobId='..\elsewhere';Replies=$valid.Replies},
         [pscustomobject]@{Mode='Publish';SourceJobId=$sourceId;SourcePath='c:\elsewhere.json';Replies=$valid.Replies}
     )
     foreach($task in $invalid){Assert-Rejected {New-ReplyConfiguration $task $environment $configPath} '无效任务字段或限额未拒绝。'}
-    foreach($value in @('无品牌回复',"Sparnow`n不允许换行",('Sparnow'+('长'*301)))){$task=Copy-Json $valid;$task.Replies[0].ReplyText=$value;Assert-Rejected {New-ReplyConfiguration $task $environment $configPath} '无效回复文案未拒绝。'}
+    foreach($value in @('无品牌回复','你可以了解一下 Sparnow。','漫映公众号是满映Manying。','关注公众号漫映Manying。',"漫映`n不允许换行",('漫映'+('长'*301)))){$task=Copy-Json $valid;$task.Replies[0].ReplyText=$value;Assert-Rejected {New-ReplyConfiguration $task $environment $configPath} '无效、旧品牌或不合文案规范的回复未拒绝。'}
     $task=Copy-Json $valid;$task.Replies[0].Reason='';Assert-Rejected {New-ReplyConfiguration $task $environment $configPath} '空选择理由未拒绝。'
     $task=Copy-Json $valid;$task.Replies[0]|Add-Member NoteProperty AuthorName '伪造用户';Assert-Rejected {New-ReplyConfiguration $task $environment $configPath} '任务覆盖候选用户未拒绝。'
     $task=Copy-Json $valid;$task.Replies+=Copy-Json $valid.Replies[0];Assert-Rejected {New-ReplyConfiguration $task $environment $configPath} '同评论重复回复未拒绝。'
@@ -91,6 +126,10 @@ try{
     Assert-True ((Get-ReplyCooldownSeconds) -eq 6) '首发没有按已流逝时间等待剩余间隔。'
     $script:FakeNow=$script:FakeNow.AddSeconds(7)
     Assert-True ((Get-ReplyCooldownSeconds) -eq 0) '过期首发冷却未解除。'
+    Assert-Rejected {New-ReplySubmissionClaim $first '你可以了解一下 Sparnow。'} '提交声明仍允许旧品牌回复。'
+    Assert-Rejected {New-ReplySubmissionClaim $first '漫映公众号是满映Manying。'} '提交声明仍允许错误公众号名称。'
+    Assert-Rejected {New-ReplySubmissionClaim $first '关注公众号漫映Manying。'} '提交声明仍允许明说公众号。'
+    Assert-True (-not (Test-ReplyAlreadyContacted $first)) '拒绝旧品牌文案后仍创建了提交账。'
     $claim=New-ReplySubmissionClaim $first $valid.Replies[0].ReplyText
     Assert-True ((Test-ReplyAlreadyContacted $first) -and (Test-ReplyAlreadyContacted $sameAuthor) -and -not (Test-ReplyAlreadyContacted $otherAuthor)) '评论和用户双维去重错误。'
     Assert-True ((Read-ReplyJson (Join-Path $environment.SharedSubmissionRoot 'last-submit.json')).Status -eq 'Pending') '发送前未持久化共享未知提交标记。'
@@ -148,7 +187,7 @@ try{
     $fixtureEntry=Join-Path $fixture 'scripts\Invoke-DouyinReplySkill.ps1'
     $fixtureData=Join-Path $testRoot 'fixture-data'
     $taskPath=Join-Path $testRoot 'discover-task.json'
-    Write-ReplyJson ([pscustomobject]@{Mode='Discover';SearchTerms=@('中文视频分镜')}) $taskPath
+    Write-ReplyJson ([pscustomobject]@{Mode='Discover';SearchTerms=@('免费动漫资源')}) $taskPath
     $described=Call-Fixture 'Describe'
     Assert-True ($described.Ok -and $described.Paths.SharedSubmissionRoot -eq (Join-Path $fixtureData 'state')) '独立包共享状态路径不正确。'
     $started=Call-Fixture 'Start' '' $taskPath
@@ -166,7 +205,7 @@ try{
     $duplicate=Call-Fixture 'Start' '' $taskPath
     Assert-True (-not $duplicate.Ok) '同目录重复任务未拒绝。'
     $snapshot=Read-ReplyJson (Join-Path $fixtureData ('jobs\'+$fixtureId+'\config.json'))
-    Assert-True ($snapshot.SearchTerms[0] -ceq '中文视频分镜') '后台任务 UTF8 中文配置丢失。'
+    Assert-True ($snapshot.SearchTerms[0] -ceq '免费动漫资源') '后台任务 UTF8 中文配置丢失。'
     $null=Call-Fixture 'Pause' $fixtureId
     $paused=Wait-Fixture $fixtureId {param($s)$s.Status -eq 'Paused' -and $s.Paused}
     Start-Sleep -Milliseconds 2300

@@ -8,7 +8,7 @@ $testRoot=Join-Path $workspace ('reply-workflow-test-'+[Guid]::NewGuid().ToStrin
 $null=New-Item -ItemType Directory -Path $testRoot -Force
 . (Join-Path $skillRoot 'src\workflows\Reply.Workflow.ps1')
 $script:Checks=0
-$candidate=[pscustomobject]@{CandidateId=('a'*64);AuthorKey=('b'*64);VideoId='7000000000000000001';CommentId='7000000000000000002';VideoUrl='https://www.douyin.com/video/7000000000000000001';VideoTitle='AI 视频';AuthorName='候选用户';AuthorUrl='https://www.douyin.com/user/fixture';Text='AI 视频怎么剪辑？';ReplyText='你说的 AI 剪辑流程，可以了解一下 Sparnow。';Reason='询问 AI 剪辑方法。'}
+$candidate=[pscustomobject]@{CandidateId=('a'*64);AuthorKey=('b'*64);VideoId='7000000000000000001';CommentId='7000000000000000002';VideoUrl='https://www.douyin.com/video/7000000000000000001';VideoTitle='动漫片段';AuthorName='候选用户';AuthorUrl='https://www.douyin.com/user/fixture';Text='这部动漫在哪里能免费看？';ReplyText='漫映Manying搜搜，免费的。';Reason='询问动漫免费资源与观看渠道。'}
 function Add-Trace([string]$Value){$script:Trace.Add($Value)}
 function Assert-True([bool]$Value,[string]$Message){if(-not $Value){throw $Message};$script:Checks++}
 function Assert-Rejected([scriptblock]$Body,[string]$Message){$rejected=$false;try{& $Body|Out-Null}catch{$rejected=$true};Assert-True $rejected $Message}

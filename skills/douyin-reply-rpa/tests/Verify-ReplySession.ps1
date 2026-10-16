@@ -47,10 +47,10 @@ function Start-ReplySessionTask($EnvInfo,[string]$RequestFile,[string]$TaskName,
 function Wait-ReplySessionReceipt([string]$Path){if(-not (Test-Path -LiteralPath $Path)){throw '模拟启动超时。'};return Read-ReplyJson $Path}
 try{
     $taskFile=Join-Path $testRoot 'task.json'
-    Write-ReplyJson ([ordered]@{Mode='Discover';SearchTerms=@('中文视频分镜')}) $taskFile
+    Write-ReplyJson ([ordered]@{Mode='Discover';SearchTerms=@('免费动漫资源')}) $taskFile
     $result=Invoke-ReplyInteractiveStart $environment $taskFile
     Assert-True ($result.Ok -and $script:Started -eq 1 -and $script:Removed -eq 1) '会话派发没有返回真实回执或清理一次性任务。'
-    Assert-True ($script:Snapshot.SearchTerms[0] -ceq '中文视频分镜') '输入快照中文丢失。'
+    Assert-True ($script:Snapshot.SearchTerms[0] -ceq '免费动漫资源') '输入快照中文丢失。'
     $pendingPath=Join-Path $environment.StateRoot 'interactive-launch.json'
     Assert-True (-not (Test-Path -LiteralPath $pendingPath)) '收到回执后仍保留未确认启动标记。'
     $script:Running=$true

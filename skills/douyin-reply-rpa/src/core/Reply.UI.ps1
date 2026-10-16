@@ -20,10 +20,17 @@
     return $nodes.ToArray()
 }
 function Get-ReplySnapshot($Video) {
-    Ensure-DouyinForeground
-    $card=Get-CommentCard
-    if(-not $card){throw '评论区不可见。'}
-    $nodes=@(Get-ReplyControlNodes $card)
+    $readyTimer=[Diagnostics.Stopwatch]::StartNew()
+    do{
+        Ensure-DouyinForeground
+        $card=Get-CommentCard
+        if(-not $card){throw '评论区不可见。'}
+        $nodes=@(Get-ReplyControlNodes $card)
+        if($nodes.Count -gt 1){break}
+        # 侧栏容器可能先出现，子控件随后才加载；不能把孤立容器当作无评论。
+        Wait-RpaDelay 0.4
+    }while($readyTimer.Elapsed.TotalSeconds -lt $Config.Timing.PageWaitSeconds)
+    if($nodes.Count -le 1){throw '评论区子控件未在限定时间内就绪。'}
     $candidates=@(ConvertFrom-ReplyCommentNodes -Nodes $nodes -VideoId $Video.VideoId -VideoTitle $Video.Title -VideoUrl ('https://www.douyin.com/video/'+$Video.VideoId))
     return [pscustomobject]@{Card=$card;Nodes=$nodes;Candidates=$candidates}
 }
@@ -141,16 +148,24 @@ function Restore-ReplyDraftTargetVisibility($Candidate) {
     }
 }
 function Assert-ReplyRecipient($Candidate,$Card) {
-    Ensure-DouyinForeground
-    $live=Find-ReplyLiveTarget $Candidate
-    if(-not $live){throw '原评论已不能唯一定位，禁止输入或发送。'}
-    $selected=@(Find-DouyinNamed '回复中' $live.ReplyElement)
-    if($selected.Count -ne 1){throw '当前选中的回复按钮不属于目标评论。'}
-    $label=Get-ReplyRecipientLabel -Nodes $live.Snapshot.Nodes
-    $expected='回复@'+$Candidate.AuthorName+': '+$Candidate.Text
-    # 抖音将 emoji 渲染为图片并裁掉相邻空白；完整原评论仍由上面的 ID/URL/逐字比对约束。
-    if(-not $label -or ($label -replace '\s','') -cne ($expected -replace '\s','')){throw '回复对象提示与作者、原评论全文不一致，禁止发送。'}
-    return $live
+    $recipientTimer=[Diagnostics.Stopwatch]::StartNew()
+    do{
+        Ensure-DouyinForeground
+        $live=Find-ReplyLiveTarget $Candidate
+        if(-not $live){throw '原评论已不能唯一定位，禁止输入或发送。'}
+        $selected=@(Find-DouyinNamed '回复中' $live.ReplyElement)
+        if($selected.Count -gt 1){throw '当前选中的回复按钮不唯一。'}
+        if($selected.Count -eq 1){
+            $label=Get-ReplyRecipientLabel -Nodes $live.Snapshot.Nodes
+            $expected='回复@'+$Candidate.AuthorName+': '+$Candidate.Text
+            # 抖音将 emoji 渲染为图片并裁掉相邻空白；原评论 ID/URL/正文仍逐字核验。
+            if(-not $label -or ($label -replace '\s','') -cne ($expected -replace '\s','')){throw '回复对象提示与作者、原评论全文不一致，禁止发送。'}
+            return $live
+        }
+        # 回复状态可能短暂重建；仅重新读取同一目标，不再点击或重选收件人。
+        Wait-RpaDelay 0.15
+    }while($recipientTimer.Elapsed.TotalSeconds -lt [Math]::Min(2,[double]$Config.Timing.PageWaitSeconds))
+    throw '当前选中的回复按钮不属于目标评论。'
 }
 function Save-ReplyTargetEvidence($Candidate,$Live) {
     $trace=[ordered]@{

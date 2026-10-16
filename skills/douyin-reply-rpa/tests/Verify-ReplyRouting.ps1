@@ -4,6 +4,7 @@ $ErrorActionPreference='Stop'
 $skillRoot=Split-Path $PSScriptRoot -Parent
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
 . (Join-Path $skillRoot 'src\core\Reply.UI.ps1')
+$verifiedRecipientCheck=(Get-Command Assert-ReplyRecipient).ScriptBlock
 $script:Checks=0
 $script:Config=[pscustomobject]@{Selectors=[pscustomobject]@{EditorClass='fixture-editor';Placeholder='留下你的精彩评论吧'}}
 $script:Editors=@();$script:Placeholders=@()
@@ -54,7 +55,7 @@ $script:Editors=@((New-FixtureElement 'hidden-editor' '隐藏草稿' $false));$s
 $anchor=Get-ReplyInputAnchor $script:Card
 Assert-True ($anchor.Element -eq $placeholder -and $null -eq $anchor.Editor) '不可见编辑器错误覆盖了当前可见占位区。'
 
-$expected=[pscustomobject]@{CandidateId=('a'*64);CommentId='7000000000000000001';VideoId='7000000000000000002';AuthorKey=('b'*64);AuthorUrl='https://www.douyin.com/user/fixture';AuthorName='原作者';Text='想了解 AI 分镜与剪辑流程。'}
+$expected=[pscustomobject]@{CandidateId=('a'*64);CommentId='7000000000000000001';VideoId='7000000000000000002';AuthorKey=('b'*64);AuthorUrl='https://www.douyin.com/user/fixture';AuthorName='原作者';Text='想找这部动漫的免费资源。'}
 $actual=$expected|ConvertTo-Json|ConvertFrom-Json
 Assert-ReplyTargetMatch $expected $actual
 Assert-True $true '同一原评论身份应通过实时比对。'
@@ -112,7 +113,7 @@ Assert-Rejected {Test-ReplyTargetVisible $viewportLive} '正文控件引用缺�
 $viewportLive.Candidate.BodyNodeIndices=$savedIndices
 
 # 输入框变高遮住原评论时，只滚动已确认的列表；草稿、焦点和原身份都必须保持。
-$script:DraftCandidate=[pscustomobject]@{ReplyText='已逐字回读的本次回复 Sparnow'}
+$script:DraftCandidate=[pscustomobject]@{ReplyText='已逐字回读的本次回复 漫映'}
 $script:DraftEditor=[pscustomobject]@{Visible=$true;Value=$script:DraftCandidate.ReplyText;Current=[pscustomobject]@{HasKeyboardFocus=$true}}
 $script:Editors=@($script:DraftEditor);$script:Placeholders=@()
 function Reset-DraftViewportCase {
@@ -210,7 +211,7 @@ function Assert-ReplyRecipient($Candidate,$Card){if(-not $script:SelectedReply){
 function Move-ReplyCommentPanel($Card,[int]$Notches){throw '已定位夹具不应滚动。'}
 function Count-RouteTrace([string]$Event){return @($script:RouteTrace|Where-Object {$_ -ceq $Event}).Count}
 $expected|Add-Member NoteProperty VideoUrl ('https://www.douyin.com/video/'+$expected.VideoId)
-$expected|Add-Member NoteProperty VideoTitle 'AI 视频教程'
+$expected|Add-Member NoteProperty VideoTitle '动漫片段'
 
 Reset-RouteCase
 $opened=Open-ReplyTarget $expected
@@ -245,4 +246,31 @@ $script:TargetMovesAfterEvidence=$true
 Assert-Rejected {Open-ReplyTarget $expected} '证据采集期间目标消失后仍继续选择回复。'
 Assert-True ((Count-RouteTrace 'BeforeClickEvidence') -eq 1 -and (Count-RouteTrace 'ReplySelected') -eq 0) '实时目标变化后仍点击旧位置。'
 
-[pscustomobject]@{Status='Passed';Checks=$script:Checks;InactivePlaceholderAccepted=$true;AmbiguousInputsRejected=$true;DraftAndUnreadableRejected=$true;IdentityChangesRejected=$true;CrossJobPageReuse=$true;LivePageIdentityRequired=$true;NoRefreshFallback=$true;TargetRecheckedBeforeClick=$true;WholeCommentViewportRequired=$true;DraftViewportRestored=$true;DraftFocusAndValuePreserved=$true;DesktopActions=0;Submitted=0}
+# 初次读取只有侧栏容器时继续等待；真实空评论树可接受，始终不就绪则有界失败。
+$script:SnapshotReads=0;$script:SnapshotWaits=0;$script:OnlyContainer=$false
+$script:Config|Add-Member NoteProperty Timing ([pscustomobject]@{PageWaitSeconds=1}) -Force
+function Ensure-DouyinForeground {}
+function Get-CommentCard {return $script:Card}
+function Get-ReplyControlNodes($Root){$script:SnapshotReads++;if($script:OnlyContainer -or $script:SnapshotReads -eq 1){return [pscustomobject]@{Index=0}};return @([pscustomobject]@{Index=0},[pscustomobject]@{Index=1})}
+function Wait-RpaDelay([double]$Seconds){$script:SnapshotWaits++}
+function ConvertFrom-ReplyCommentNodes {return @()}
+$snapshot=Get-ReplySnapshot ([pscustomobject]@{VideoId=$expected.VideoId;Title=$expected.VideoTitle})
+Assert-True ($script:SnapshotReads -eq 2 -and $script:SnapshotWaits -eq 1 -and $snapshot.Nodes.Count -eq 2) '空侧栏容器未等待子控件就绪。'
+Assert-True ($snapshot.Candidates.Count -eq 0) '已就绪的真实空评论树未保留空候选结果。'
+$script:OnlyContainer=$true;$script:Config.Timing.PageWaitSeconds=0
+Assert-Rejected {Get-ReplySnapshot ([pscustomobject]@{VideoId=$expected.VideoId;Title=$expected.VideoTitle})} '始终未加载的侧栏被误报为空评论。'
+
+$script:RecipientReads=0;$script:RecipientWaits=0;$script:SelectedStateDelayed=$true;$script:RecipientLabel='回复@'+$expected.AuthorName+': '+$expected.Text
+$script:Config.Timing.PageWaitSeconds=1
+function Find-ReplyLiveTarget($Candidate){$script:RecipientReads++;return [pscustomobject]@{ReplyElement='verified-original-reply';Snapshot=[pscustomobject]@{Nodes=@()}}}
+function Find-DouyinNamed([string]$Name,$Root){if($Name -cne '回复中' -or $Root -cne 'verified-original-reply'){throw '回复状态查询脱离原评论。'};if($script:SelectedStateDelayed -and $script:RecipientReads -eq 1){return @()};return 'selected-state'}
+function Get-ReplyRecipientLabel {return $script:RecipientLabel}
+function Wait-RpaDelay([double]$Seconds){$script:RecipientWaits++}
+$null=& $verifiedRecipientCheck $expected $script:Card
+Assert-True ($script:RecipientReads -eq 2 -and $script:RecipientWaits -eq 1) '短暂缺失的回复状态未重新读取同一目标。'
+$script:SelectedStateDelayed=$false;$script:RecipientLabel='回复@其他用户: 其他评论'
+Assert-Rejected {& $verifiedRecipientCheck $expected $script:Card} '等待后错误收件人仍被接受。'
+$script:SelectedStateDelayed=$true;$script:RecipientReads=0;$script:Config.Timing.PageWaitSeconds=0
+Assert-Rejected {& $verifiedRecipientCheck $expected $script:Card} '缺失的目标回复状态未有界失败。'
+
+[pscustomobject]@{Status='Passed';Checks=$script:Checks;InactivePlaceholderAccepted=$true;AmbiguousInputsRejected=$true;DraftAndUnreadableRejected=$true;IdentityChangesRejected=$true;CrossJobPageReuse=$true;LivePageIdentityRequired=$true;NoRefreshFallback=$true;TargetRecheckedBeforeClick=$true;WholeCommentViewportRequired=$true;DraftViewportRestored=$true;DraftFocusAndValuePreserved=$true;CommentChildrenReadiness=$true;DesktopActions=0;Submitted=0}
